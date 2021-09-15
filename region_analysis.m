@@ -2,8 +2,14 @@
 % For each patient, divides the metrics of the channels into several
 % regions - HP,pHP,FL,TL,PL,OL. Also, the function removes the other areas
 % from the analysis.
+% inputs: resultsdir contains patients' folders and a file with the channels' localization;
+% folder - a patient's folder with extracted features (xlsx);
+% i - number of a patient;
+% outputs: metric - a table with the features of the HFO events for all patients;
+% vector - a table with median value of the features across channels
 
-function [metric,vector] = region_analysis(maindir,resultsdir,folder,i)
+
+function [metric,vector] = region_analysis(resultsdir,folder,i)
         
     restoredefaultpath
     rehash toolboxcache
@@ -12,13 +18,12 @@ function [metric,vector] = region_analysis(maindir,resultsdir,folder,i)
     event = readtable([file(1).folder,'/',file(1).name]);
     event = table2cell(event);
 
-    loc = readtable([maindir,'/Tables_stats/iEEG_localization.xlsx'],...
-                                                'Sheet',folder(i).name);
+    loc = readtable([resultsdir,'/iEEG_localization.xlsx'],'Sheet',folder(i).name);
     ch_ra = channel_ra(i);
                                                 
     for j = 1:size(ch_ra,1)
         
-  %      try
+    try
         
         id = event(ismember(cat(1,event(:,1)),ch_ra(j,1)),1:10);
         
@@ -48,11 +53,11 @@ function [metric,vector] = region_analysis(maindir,resultsdir,folder,i)
             
         end
         
-%        catch
+     catch
             
-%            continue
+           continue
             
-%        end
+     end
                     
     end
     
@@ -74,7 +79,7 @@ function [metric,vector] = region_analysis(maindir,resultsdir,folder,i)
     
     for t = 1:size(ch_nra,1)
         
-   %     try
+    try
         
         id = event(ismember(cat(1,event(:,1)),ch_nra(t,1)),1:10);
         
@@ -104,11 +109,11 @@ function [metric,vector] = region_analysis(maindir,resultsdir,folder,i)
             
         end
         
-   %     catch
+    catch
             
-   %        continue
+        continue
             
-   %     end
+    end
                     
     end
     
@@ -127,7 +132,8 @@ function [metric,vector] = region_analysis(maindir,resultsdir,folder,i)
 end
 
 %% ========================================================================
-% For each patient, resection area channels
+% For each patient, channels inside the resected HFO areas.
+% Each channel has its localization and type (TN, TP, FN, FP) according to seizure outcome
 
 function ch_ra = channel_ra(i)
 
