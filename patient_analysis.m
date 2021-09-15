@@ -2,6 +2,10 @@
 % For each channel, it allows to obtain the values of the
 % metrics from HFOobj structure - amplitudes,durations,frequencies of the 
 % Ripples/FRs, the threshold of the Ripples as well.
+% inputs: HFOobj - a structure with the detected HFO events;
+% rate - a structure with averaged rate of ripples, FR, and RFR for each channel;
+% i - number of patient 
+% output: metric - a table with extracted features of the HFO events for each patient.
 
 function metric = patient_analysis(HFOobj,rate,i)
     
