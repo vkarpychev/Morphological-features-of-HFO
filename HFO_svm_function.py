@@ -12,7 +12,7 @@ from sklearn import metrics
 from sklearn.svm import SVC
 from sklearn.preprocessing import scale
 from sklearn.feature_selection import f_classif
-from sklearn.model_selection import GridSearchCV, RepeatedStratifiedKFold, train_test_split
+from sklearn.model_selection import GridSearchCV, RepeatedStratifiedKFold, cross_val_score
 from sklearn.ensemble import IsolationForest
 from imblearn.combine import SMOTEENN
 
@@ -40,7 +40,9 @@ def svm_feature_selection(df, feature):
     
     X_resampled, y_resampled = SMOTEENN().fit_resample(X_train, y_train)
     
-    F, p = f_classif(X_resampled, y_resampled)
+    # F, p = f_classif(X_resampled, y_resampled)
+    
+    F, p = f_classif(X_train, y_train)
     
     rank = np.argsort(-F)
     
@@ -53,70 +55,6 @@ def svm_feature_selection(df, feature):
     rank_stat = np.concatenate((np.array([ranked_feature]), np.array([F]), np.array([p])))    
                     
     return ranked_feature, rank_stat
-
-def svm_classifier_train(X_resampled, y_resampled, s, ranked_feature):
-    
-    for n, element in enumerate(ranked_feature):
-        
-        if n == 0:
-            
-            all_ranked_feature = [[element]]
-            
-        else:
-    
-            all_ranked_feature.append(list(all_ranked_feature[n-1]) + [element])
-            
-    del element, n
-        
-    for number, rank in enumerate(all_ranked_feature):
-        
-        print('Training SVM in the %s with feature - %s' %(''.join(s),', '.join(rank)))
-            
-        X_resampled_rank = X_resampled[rank].to_numpy()
-        
-        params = [{'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000], 'gamma': [0.001, 0.01, 0.1, 1, 10, 100, 1000], 'kernel': ['rbf']}]
-                
-        cv = RepeatedStratifiedKFold(n_splits = 5, n_repeats = 1, random_state = 1)
-                        
-        search = GridSearchCV(estimator = SVC(), param_grid = params, cv = cv, scoring = 'f1', n_jobs = -1)
-        
-        search = search.fit(X_resampled_rank, y_resampled)
-        
-        if number == 0:
-        
-            training = np.empty((6,7), dtype = object)
-            
-            training[0,0] = 'rank'
-            
-            training[0,1] = 'kernel'
-            
-            training[0,2] = 'C'
-                            
-            training[0,3] = 'gamma'
-            
-            training[0,4] = 'degree'
-                                    
-            training[0,5] = 'roc_auc'
-            
-            training[0,6] = 'std'
-            
-        training[number + 1,0] = ','.join(all_ranked_feature[number])
-        
-        training[number + 1,1] = search.best_estimator_.kernel
-            
-        training[number + 1,2] = search.best_estimator_.C
-        
-        training[number + 1,3] = search.best_estimator_.gamma
-            
-        training[number + 1,4] = search.best_estimator_.degree
-            
-        training[number + 1,5] = max(search.cv_results_.get('mean_test_score'))
-
-        training[number + 1,6] = search.cv_results_.get('std_test_score')[np.where(search.cv_results_.get('mean_test_score') 
-                                                                                 
-                                                 == max(search.cv_results_.get('mean_test_score')))[0][0]]
-
-    return training
 
 def svm_classifier_validation(df, s, ranked_feature):
     
@@ -131,74 +69,30 @@ def svm_classifier_validation(df, s, ranked_feature):
             all_ranked_feature.append(list(all_ranked_feature[n-1]) + [element])
             
     del element, n
-        
-    for number, rank in enumerate(all_ranked_feature):
-        
-        if s == ['MTL']:
-            
-            patient = [3,4,6,11,15,18,19,34,37,40,42]
-            
-        elif s == ['Neocortex']:
-            
-            patient = [2,4,9,19,37]
-        
-        for n in patient:
-            
-            try:
-            
-                X_train = df[df['class'].isin(['TN'])]
-            
-                X_train = X_train[~ X_train['ID'].isin([str(n)])]
-                
-                X_train, y_train = svm_outlier_removal(df, ranked_feature)
-            
-                X_resampled, y_resampled = SMOTEENN().fit_resample(X_train, y_train)
-                
-                X_resampled_rank = X_resampled[rank].to_numpy()
-                            
-                print('Validation SVM in the %s with feature - %s, patient - %s' %(''.join(s),', '.join(rank), n))
-                    
-                params = [{'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000], 'gamma': [0.001, 0.01, 0.1, 1, 10, 100, 1000], 'kernel': ['rbf']}]
-                
-                cv = RepeatedStratifiedKFold(n_splits = 5, n_repeats = 1, random_state = 1)
-                        
-                search = GridSearchCV(estimator = SVC(), param_grid = params, cv = cv, scoring = 'f1', n_jobs = -1)
-                        
-                clf = search.fit(X_resampled_rank, y_resampled).best_estimator_
-                
-                X_test = df[df['class'].isin(['TN'])]
-            
-                X_test = X_test[X_test['ID'].isin([str(n)])]
-            
-                y_test = X_test['area'].to_numpy()
-            
-                X_test = scale(X_test[rank].to_numpy())
-                
-                y_pred = clf.predict_proba(X_test)[:,1]
-                                
-                precision, recall, _ = metrics.precision_recall_curve(y_test, y_pred)
-                
-                f = (2 * precision * recall)/(precision + recall)
-                
-                f = f[~ np.isnan(f)]
-                                
-                f = f[np.argmax(f)]
-            
-                if s == ['MTL'] and n == 3:
-                                
-                    fscore = list([f])
-                                
-                elif s == ['Neocortex'] and n == 2:
-                    
-                    fscore = list([f])
     
-                else:
-                                    
-                    fscore.append(f)
-                    
-            except:
+    X_train = df[df['class'].isin(['TN'])]
+                            
+    X_train, y_train = svm_outlier_removal(df, ranked_feature)
+            
+    X_resampled, y_resampled = SMOTEENN().fit_resample(X_train, y_train)
+    
+    params = [{'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000], 'gamma': [0.001, 0.01, 0.1, 1, 10, 100, 1000], 'kernel': ['rbf']}]
                 
-                continue
+    cv = RepeatedStratifiedKFold(n_splits = 5, n_repeats = 1, random_state = 1)
+             
+    for number, rank in enumerate(all_ranked_feature):
+                    
+        print('Validation SVM in the %s with feature - %s' %(''.join(s),', '.join(rank)))
+        
+        X_resampled_rank = X_resampled[rank].to_numpy()
+                                    
+        search = GridSearchCV(estimator = SVC(), param_grid = params, scoring = 'f1', cv = cv)
+                        
+        score = cross_val_score(search, X_resampled_rank, y_resampled, scoring = 'f1', cv = cv)        
+     
+        f = np.mean(score)
+                
+        fscore = list([f])
                       
         result = pd.concat((pd.DataFrame({'fscore': fscore}), pd.DataFrame([''.join(str(rank))[2:-2] 
                                                                             
@@ -212,11 +106,11 @@ def svm_classifier_validation(df, s, ranked_feature):
             
             result_tn = pd.concat([result_tn, result], axis = 0)
             
-        del fscore, clf, X_test, X_resampled_rank, n
+        del fscore, f, score, search, X_resampled_rank
             
     return result_tn
 
-def svm_classifier_test(df, s, ranked_feature, training):
+def svm_classifier_predict(df, s, ranked_feature):
     
     for n, element in enumerate(ranked_feature):
         
@@ -238,45 +132,49 @@ def svm_classifier_test(df, s, ranked_feature, training):
         
     for number, rank in enumerate(all_ranked_feature):
         
+        X_resampled_rank = X_train[rank].to_numpy()
+                
         X_resampled_rank = X_resampled[rank].to_numpy()
+                                                
+        print('Prediction in the %s with feature - %s' %(''.join(s),', '.join(rank)))
                                                 
         params = [{'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000], 'gamma': [0.001, 0.01, 0.1, 1, 10, 100, 1000], 'kernel': ['rbf']}]
                 
         cv = RepeatedStratifiedKFold(n_splits = 5, n_repeats = 1, random_state = 1)
                         
-        search = GridSearchCV(estimator = SVC(), param_grid = params, cv = cv, scoring = 'f1', n_jobs = -1)
+        search = GridSearchCV(estimator = SVC(), param_grid = params, cv = cv, scoring = 'f1', n_jobs = -1, verbose = 1)
                         
         clf = search.fit(X_resampled_rank, y_resampled).best_estimator_
                 
         if s == ['MTL']:
             
-            globals()['test_%s' % number] = np.empty((1,7), dtype = object)
+            globals()['prediction_%s' % number] = np.empty((1,7), dtype = object)
                             
-            X_test = df[df['class'].isin(['TP'])]
+            X = df[df['class'].isin(['TP'])]
                 
-            X_test = scale(X_test[rank].to_numpy())
+            X = scale(X[rank].to_numpy())
                              
-            y_test = df[df['class'].isin(['TP'])]['area'].to_numpy()
+            y = df[df['class'].isin(['TP'])]['area'].to_numpy()
                 
-            y_pred = np.array(clf.predict(X_test)).T
+            y_pred = np.array(clf.predict(X)).T
                         
-            TN, FP, FN, TP = metrics.confusion_matrix(y_test, y_pred, labels = [1, 0]).ravel()
+            TN, FP, FN, TP = metrics.confusion_matrix(y, y_pred, labels = [1, 0]).ravel()
         
             accuracy = (TN + TP)/(TN + FP + FN + TP)
                 
-            globals()['test_%s' % number][0, 0] = ','.join(all_ranked_feature[number])
+            globals()['prediction_%s' % number][0, 0] = ','.join(all_ranked_feature[number])
             
-            globals()['test_%s' % number][0, 1] = ''.join(str([2, 3, 9, 10, 20]))[1:-1]
+            globals()['prediction_%s' % number][0, 1] = ''.join(str([2, 3, 9, 10, 20]))[1:-1]
                                                                     
-            globals()['test_%s' % number][0, 2] = round(accuracy,3)
+            globals()['prediction_%s' % number][0, 2] = round(accuracy,3)
     
-            globals()['test_%s' % number][0, 3] = TN
+            globals()['prediction_%s' % number][0, 3] = TN
         
-            globals()['test_%s' % number][0, 4] = FP
+            globals()['prediction_%s' % number][0, 4] = FP
                 
-            globals()['test_%s' % number][0, 5] = FN
+            globals()['prediction_%s' % number][0, 5] = FN
                 
-            globals()['test_%s' % number][0, 6] = TP
+            globals()['prediction_%s' % number][0, 6] = TP
             
             if number == 0:
             
@@ -290,31 +188,31 @@ def svm_classifier_test(df, s, ranked_feature, training):
                                     
         elif s == ['Neocortex']:
             
-            globals()['test_%s' % number] = np.empty((2,7), dtype = object)
+            globals()['prediction_%s' % number] = np.empty((2,7), dtype = object)
             
             for n, patient in enumerate([19, 42]):
                 
-                X_test = df[df['ID'].isin([str(patient)])]
+                X = df[df['ID'].isin([str(patient)])]
                 
-                y_test = df[df['ID'].isin([str(patient)])]
+                y = df[df['ID'].isin([str(patient)])]
                 
                 if patient == 19:
                                                         
-                    X_test = X_test[X_test['class'].isin(['FP'])]
+                    X = X[X['class'].isin(['FP'])]
                 
-                    X_test = scale(X_test[rank].to_numpy())
+                    X = scale(X[rank].to_numpy())
                              
-                    y_test = y_test[y_test['class'].isin(['FP'])]['area'].to_numpy()
+                    y = y[y['class'].isin(['FP'])]['area'].to_numpy()
                 
                 elif patient == 42:
                                         
-                    X_test = X_test[X_test['class'].isin(['TP'])]
+                    X = X[X['class'].isin(['TP'])]
                 
-                    X_test = scale(X_test[rank].to_numpy())
+                    X = scale(X[rank].to_numpy())
                              
-                    y_test = y_test[y_test['class'].isin(['TP'])]['area'].to_numpy()
+                    y = y[y['class'].isin(['TP'])]['area'].to_numpy()
                 
-                y_pred = np.array(clf.predict(X_test)).T
+                y_pred = np.array(clf.predict(X)).T
                     
                 if n == 0 and number == 0:
                                 
@@ -326,51 +224,51 @@ def svm_classifier_test(df, s, ranked_feature, training):
                         
                     event = pd.concat([event, v], axis = 0)
                                                             
-                TN, FP, FN, TP = metrics.confusion_matrix(y_test, y_pred, labels = [1, 0]).ravel()
+                TN, FP, FN, TP = metrics.confusion_matrix(y, y_pred, labels = [1, 0]).ravel()
         
                 accuracy = (TN + TP)/(TN + FP + FN + TP)
                 
-                globals()['test_%s' % number][n, 0] = ','.join(all_ranked_feature[number])
+                globals()['prediction_%s' % number][n, 0] = ','.join(all_ranked_feature[number])
                 
-                globals()['test_%s' % number][n, 1] = patient
+                globals()['prediction_%s' % number][n, 1] = patient
                                                                     
-                globals()['test_%s' % number][n, 2] = round(accuracy,3)
+                globals()['prediction_%s' % number][n, 2] = round(accuracy,3)
         
-                globals()['test_%s' % number][n, 3] = TN
+                globals()['prediction_%s' % number][n, 3] = TN
         
-                globals()['test_%s' % number][n, 4] = FP
+                globals()['prediction_%s' % number][n, 4] = FP
                 
-                globals()['test_%s' % number][n, 5] = FN
+                globals()['prediction_%s' % number][n, 5] = FN
                 
-                globals()['test_%s' % number][n, 6] = TP
+                globals()['prediction_%s' % number][n, 6] = TP
                                        
         if number == 0:
                     
-            test = np.empty((1,7), dtype = object)
+            prediction = np.empty((1,7), dtype = object)
             
-            test[0,0] = 'rank'
+            prediction[0,0] = 'rank'
             
-            test[0,1] = 'patient'
+            prediction[0,1] = 'patient'
                         
-            test[0,2] = 'accuracy'
+            prediction[0,2] = 'accuracy'
             
-            test[0,3] = 'TN'
+            prediction[0,3] = 'TN'
             
-            test[0,4] = 'FP'
+            prediction[0,4] = 'FP'
             
-            test[0,5] = 'FN'
+            prediction[0,5] = 'FN'
             
-            test[0,6] = 'TP'
+            prediction[0,6] = 'TP'
             
-            test = np.concatenate((test, globals()['test_%s' % number]))
+            prediction = np.concatenate((prediction, globals()['prediction_%s' % number]))
         
         else:
             
-            test = np.concatenate((test, globals()['test_%s' % number]))
+            prediction = np.concatenate((prediction, globals()['prediction_%s' % number]))
             
-        del clf, X_resampled_rank, y_pred, TN, FP, FN, TP, accuracy, globals()['test_%s' % number],
+        del clf, X_resampled_rank, y_pred, TN, FP, FN, TP, accuracy, globals()['prediction_%s' % number],
         
-    return test, event
+    return prediction, event
 
 def svm_classifier_rate(df, s, rank, patient, y_pred):
     
