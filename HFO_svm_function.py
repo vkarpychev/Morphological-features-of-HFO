@@ -32,7 +32,7 @@ def svm_outlier_removal(df, feature):
     
     X_train, y_train = X_train[mask, :], y_train[mask]
         
-    X_train = pd.DataFrame((X_train), columns = feature)
+    X_train = pd.DataFrame(scale(X_train), columns = feature)
     
     return X_train, y_train
 
